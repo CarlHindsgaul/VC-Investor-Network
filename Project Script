@@ -1,1 +1,38 @@
+library(tidyverse)
+library(readxl)
+library(stringr)
+library(igraph)
+
+### load data
+
+data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\VC Data.xlsx")
+
+### restructure data so each row represents and "edge" (connection between investor and company)
+
+edge_list <- data %>%
+  mutate(Investors = strsplit(as.character(Investors), ", ")) %>%
+  unnest(Investors) %>% 
+  separate(Investors, c("Investor", "InvestorCountry"), " \\(") %>% 
+  mutate(InvestorCountry = gsub("\\)", "", InvestorCountry))
+
+
+### restructure edge_list to a binary incidence matrix, which is useful for network analysis
+  
+    ### first make a new dataframe with only edgelist variables (company and investor)
+
+edge_list_excl <- edge_list %>%
+  select(Investor, Company)
+
+    ### now make the actual incidence matrix
+
+vertex_list <- unique(c(edge_list_excl$Company, edge_list_excl$Investor))
+vertex_types <- ifelse(vertex_list %in% edge_list_excl$Company, TRUE, FALSE)
+g <- graph_from_data_frame(edge_list_excl, directed = FALSE, vertices = data.frame(name = vertex_list, type = vertex_types))
+incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
+print(incidence_matrix)
+write.csv(incidence_matrix, file = "incidence_matrix.csv", row.names = TRUE)
+
+### add the incidence matrix as a dataframe  
+
+MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 

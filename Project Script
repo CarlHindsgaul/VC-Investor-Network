@@ -1,3 +1,5 @@
+### load packages (install first if the PC doesn't have them installed)
+
 library(tidyverse)
 library(readxl)
 library(stringr)
@@ -6,7 +8,7 @@ library(igraph)
 ### load data
  
     ### find the VC Data file on my github: https://github.com/CarlHindsgaul/VC-Investor-Network)
-    ### now download it and modify the script (line 11) so your downloaded file is loaded as the dataframe
+    ### now download it and modify the path in the script so your downloaded file is loaded as the dataframe
 
 data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\VC Data.xlsx")
 
@@ -40,3 +42,4 @@ write.csv(incidence_matrix, file = "incidence_matrix.csv", row.names = TRUE)
 MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 
 ### we can now make network analysis
+

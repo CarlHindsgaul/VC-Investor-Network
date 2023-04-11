@@ -28,18 +28,26 @@ edge_list <- data %>%
 edge_list_excl <- edge_list %>%
   select(Investor, Company)
 
-    ### now make the actual incidence matrix
+    ### now make the actual incidence matrix. We need to create an igraph object, i.e. a network-analysis object. 
+    ### the iGraph object requires a list of nodes and the type of each node.
+
+        ### we only want the unique names. In the edge_list, each company and investor (each 'vertex') can appear several times.
 
 vertex_list <- unique(c(edge_list_excl$Company, edge_list_excl$Investor))
+
+        ### we also want to have a information about whether each node/name is a company or an investor.
+
 vertex_types <- ifelse(vertex_list %in% edge_list_excl$Company, TRUE, FALSE)
+
+        ### we now create the igraph object, let us call it "g", and convert it into an incidence matrix.
+
 g <- graph_from_data_frame(edge_list_excl, directed = FALSE, vertices = data.frame(name = vertex_list, type = vertex_types))
+
 incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
 print(incidence_matrix)
-write.csv(incidence_matrix, file = "incidence_matrix.csv", row.names = TRUE)
 
-    ### add the incidence matrix as a dataframe  
+    ### add the incidence matrix as a dataframe (you can use the link from my github, which is simply a .csv export of the incidence_matrix generated above) 
 
 MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 
 ### we can now make network analysis
-

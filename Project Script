@@ -46,7 +46,7 @@ g <- graph_from_data_frame(edge_list_excl, directed = FALSE, vertices = data.fra
 incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
 print(incidence_matrix)
 
-    ### add the incidence matrix as a dataframe (you can use the link from my github, which is simply a .csv export of the incidence_matrix generated above) 
+        ### add the incidence matrix as a dataframe (you can use the link from my github, which is simply a .csv export of the incidence_matrix generated above) 
 
 MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 

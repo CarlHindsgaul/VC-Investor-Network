@@ -4,6 +4,9 @@ library(stringr)
 library(igraph)
 
 ### load data
+ 
+    ### find the VC Data file on my github: https://github.com/CarlHindsgaul/VC-Investor-Network)
+    ### now download it and modify the script (line 11) so your downloaded file is loaded as the dataframe
 
 data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\VC Data.xlsx")
 

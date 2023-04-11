@@ -12,7 +12,7 @@ library(igraph)
 
 data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\VC Data.xlsx")
 
-### restructure data so each row represents and "edge" (connection between investor and company)
+### restructure data so each row represents an "edge" (connection between investor and company)
 
 edge_list <- data %>%
   mutate(Investors = strsplit(as.character(Investors), ", ")) %>%
@@ -51,3 +51,4 @@ print(incidence_matrix)
 MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 
 ### we can now make network analysis
+

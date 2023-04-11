@@ -32,7 +32,8 @@ incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
 print(incidence_matrix)
 write.csv(incidence_matrix, file = "incidence_matrix.csv", row.names = TRUE)
 
-### add the incidence matrix as a dataframe  
+    ### add the incidence matrix as a dataframe  
 
 MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
 
+### we can now make network analysis

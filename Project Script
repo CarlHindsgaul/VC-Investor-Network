@@ -63,7 +63,20 @@ co_investment_matrix <- binary_investment_matrix %*% t(binary_investment_matrix)
 diag(co_investment_matrix) <- 0
 
         ### Now we have the adjacency matrix. I will just create a separate object for it with that name: adjacency_matrix
+        ### I will write it to csv and upload it to github 
 
 adjacency_matrix <- co_investment_matrix
+
+### With the adjacency matrix, which is useful for network analysis, we can make the igraph i.e. network analysis object
+
+g2 <- graph_from_adjacency_matrix(adjacency_matrix, mode = "undirected")
+
+### We can now, for the first time, get a visual, qualitative sense of the data!
+### (it gets too messy with all the labels)
+
+plot(g2,
+     vertex.size = 10,
+     vertex.label = NA,
+     main = "Investor Network / no label")
 
 

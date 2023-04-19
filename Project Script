@@ -21,14 +21,14 @@ edge_list <- data %>%
   mutate(InvestorCountry = gsub("\\)", "", InvestorCountry))
 
 
-### restructure edge_list to a binary incidence matrix, which is useful for network analysis
+### restructure edge_list to an adjacency matrix, which is useful for network analysis
   
     ### first make a new dataframe with only edgelist variables (company and investor)
 
 edge_list_excl <- edge_list %>%
   select(Investor, Company)
 
-    ### now make the actual incidence matrix. We need to create an igraph object, i.e. a network-analysis object. 
+    ### now make an incidence matrix. We need to create an igraph object, i.e. a network-analysis object. 
     ### the iGraph object requires a list of nodes and the type of each node.
 
         ### we only want the unique names. In the edge_list, each company and investor (each 'vertex') can appear several times.
@@ -44,11 +44,26 @@ vertex_types <- ifelse(vertex_list %in% edge_list_excl$Company, TRUE, FALSE)
 g <- graph_from_data_frame(edge_list_excl, directed = FALSE, vertices = data.frame(name = vertex_list, type = vertex_types))
 
 incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
-print(incidence_matrix)
 
-        ### add the incidence matrix as a dataframe (you can use the link from my github, which is simply a .csv export of the incidence_matrix generated above) 
+        ### Make an adjacency matrix
+        ### (First, we turn the incidence matrix into a binary, so only 1 for investment, otherwise 0. This is to prepare for later calculations that require binary format)
 
-MatrixData <- read_csv("https://raw.githubusercontent.com/CarlHindsgaul/VC-Investor-Network/main/incidence_matrix.csv")
+binary_investment_matrix <- as.matrix(ifelse(incidence_matrix > 0, 1, 0))
 
-### we can now make network analysis
+        ### (Second, we multiply (%*%) the binary investment matrix with its transpose (i.e. 'turned' matrix, so row 1 becomes column 1 etc.))
+        ### (The result is the 'overlap' of investors since we have binary data, only 1 and 0, and matrix multiplication works by multiplying row values with column values
+        ###  so when, say, investor row b has a '1' on its fourth column, representing company y, and transpore-investor a has a 1 in its fourth row, we have 1*1 = an overlap
+        ###  and the way matrix multiplication works, all row & column values are 'compared' like this and summed up, thus counting overlaps)
+        ### All right, so we do the calculation: multiply the matrix with its transpose (t() function)
+
+co_investment_matrix <- binary_investment_matrix %*% t(binary_investment_matrix)
+
+        ### But we also set the diagonal elements to 0, since we are not concerned with how connected each fund is with itself
+
+diag(co_investment_matrix) <- 0
+
+        ### Now we have the adjacency matrix. I will just create a separate object for it with that name: adjacency_matrix
+
+adjacency_matrix <- co_investment_matrix
+
 

@@ -75,8 +75,26 @@ g2 <- graph_from_adjacency_matrix(adjacency_matrix, mode = "undirected")
 ### (it gets too messy with all the labels)
 
 plot(g2,
-     vertex.size = 10,
+     vertex.size = 7,
      vertex.label = NA,
      main = "Investor Network / no label")
+
+### Ok great, now let us create network data for the investors: betweenness centrality, centralization score, and k-step reach.
+      
+      ### we first need a dataset if we want to make a quantitative model that uses all of these measures at the same time. We will make a new one called edge_list_2.
+
+edge_list_2 <- edge_list
+
+      ### we then start with betweenness
+
+betweenness_object <- betweenness(g2)
+
+betweenness_df <- data.frame(
+  Investor = names(betweenness_object),
+  Betweenness = betweenness_object)
+
+edge_list_2 <- merge(edge_list_2, betweenness_df, by = "Investor", all.x = TRUE) ### the last part all.x is about keeping all rows, and by = means we use Investor column for 'matching' values to the appropriate investor
+
+      ### let us now go to centralization score
 
 

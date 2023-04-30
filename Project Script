@@ -11,7 +11,7 @@ library(openxlsx)
     ### find the VC Data file on my github: https://github.com/CarlHindsgaul/VC-Investor-Network)
     ### now download it and modify the path in the script so your downloaded file is loaded as the dataframe
 
-data <- read_excel("C:\\Users\\carlw\\My drive\\2nd Year Project\\VC Data.xlsx")
+data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\VC Data.xlsx")
 
 ### restructure data so each row represents an "edge" (connection between investor and company)
 
@@ -127,6 +127,9 @@ transitivity_df <- data.frame(
   Investor = Investor_names,
   Transitivity = transitivity_object)
 
+edge_list_2 <- merge(edge_list_2, transitivity_df, by = "Investor", all.x = TRUE)
+
+
 ### I will test out what the network looks like with binary edges (never more than 1 connection to any investor) ###
 
 binary_matrix <- adjacency_matrix
@@ -134,6 +137,11 @@ binary_matrix <- adjacency_matrix
 binary_matrix[binary_matrix > 0] <- 1
 
 gbinary <- graph_from_adjacency_matrix(binary_matrix, mode = "undirected")
+
+plot(gbinary,
+     vertex.size = 7,
+     vertex.label = NA,
+     main = "Investor Network / Binary Ties")
 
           ### I will also test degree centralization with binary edges/no edge
 
@@ -149,7 +157,7 @@ edge_list_2 <- merge(edge_list_2, binary_cent_degree_df, by = "Investor", all.x 
 
 edge_list_2$Binary_normalized_degree_centralization <- edge_list_2$Binary_degree_centralization / 37    ### We use 37 because 37 is the highest UNIQUE degree centralization (Seed Capital)
 
-## I will show the difference between controlling for multiple investments in the normalized centralization score: 
+## I will illustrate the difference between controlling for multiple investments in the normalized centralization score: 
 
 ggplot(edge_list_2) +
   geom_density(aes(x = Binary_normalized_degree_centralization, color = "Binary"), size = 1) +
@@ -163,4 +171,3 @@ ggplot(edge_list_2) +
 ### Test over ###
 
 ### Let us do some K-step! 
-

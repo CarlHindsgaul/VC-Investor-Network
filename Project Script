@@ -5,6 +5,8 @@ library(readxl)
 library(stringr)
 library(igraph)
 library(openxlsx)
+library(modelsummary)
+library(broom)
 
 ### load data
  
@@ -170,4 +172,102 @@ ggplot(edge_list_2) +
 
 ### Test over ###
 
-### Let us do some K-step! 
+
+### FINANCIALS: OK, we might do more network stuff (e.g. k-step), but let us get the financials sorted
+
+    ### We have manually typed in the financials to the edge_list_2 file, renaming it "edge_list_2 - with financials"
+    ### It is in the github folder, download it and put your own path below: 
+
+edge_list_2_with_financials <- read.xlsx("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\edge_list_2 - with financials.xlsx")
+
+    ### now for some brief currency clean up
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  mutate_at(.vars = vars(GP2019, GP2020, GP2021, GP2022), 
+            .funs = ~ ifelse(Valuta == "EUR", . * 7.445, .),) 
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  select(-Valuta)
+
+write.xlsx(edge_list_2_with_financials, "C:\\Users\\carlw\\Mit drev\\2nd Year Project\\edge_list_2 - with financials4.xlsx")
+
+    ### OK let us calculate VC fund performance
+
+          ### first we take care not to end up with positive growth numbers when dividing a negative number with a negative number! (we use'abs')
+          ### otherwise e.g. GP of -10 in 2019 and -20 in 2020 would be: (-20-10)/-10 = 3, and of course the company did not grow by 300%!
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  mutate(Growth2020 = (GP2020 - GP2019) / abs(GP2019),
+         Growth2021 = (GP2021 - GP2020) / abs(GP2020),
+         Growth2022 = (GP2022 - GP2021) / abs(GP2021))
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  mutate(AvgGrowth = rowMeans(select(., Growth2020, Growth2021, Growth2022), na.rm = TRUE))
+
+investor_average_growth <- edge_list_2_with_financials %>%
+  group_by(Investor) %>%
+  summarise(InvestorAvgGrowth = mean(AvgGrowth, na.rm = TRUE))
+
+### OK - let us combine the fund-level network data and fund-level performance data to make statistics
+
+Final_Investor_Dataset <- investor_average_growth
+
+investor_variables <- edge_list_2_with_financials %>%
+  select(Investor, InvestorCountry, Betweenness, Degree_centralization, Normalized_degree_centralization,
+         Binary_degree_centralization, Binary_normalized_degree_centralization) %>%
+  distinct()
+
+Final_Investor_Dataset <- Final_Investor_Dataset %>%
+  left_join(investor_variables, by = "Investor")
+
+### Perfect, let us then do the statistics
+
+  ### It is interesting to find out the impact of being a Danish VC fund vs non Danish, so we will make a binary variable for that 
+
+Final_Investor_Dataset <- Final_Investor_Dataset %>%
+  mutate(Is_Danish = ifelse(InvestorCountry == "DK", 1, 0))
+
+  ### OK let us do linear models first. 
+
+lm1 <- lm(InvestorAvgGrowth ~  Binary_normalized_degree_centralization, data = Final_Investor_Dataset)
+modelsummary(lm1, stars = TRUE, gof_map = c("nobs", "adj.r.squared"))
+model_tidy1 <- tidy(summary(lm1))
+
+lm2 <- lm(InvestorAvgGrowth ~ Degree_centralization, data = Final_Investor_Dataset)
+modelsummary(lm2, stars = TRUE, gof_map = c("nobs", "adj.r.squared"))
+model_tidy2 <- tidy(summary(lm2))
+
+  ### OK they do not predit anything really, so let us try with parabolic models:
+
+      ### first: Degree centralization (normalized score, counting each tie only once)
+
+          ### I think it is easier to interpret the variables if 1 = 1%, so let us change it:
+
+Final_Investor_Dataset$InvestorAvgGrowth_in_Percent <- Final_Investor_Dataset$InvestorAvgGrowth * 100
+
+Final_Investor_Dataset$Normalized_Centralization_in_Percent <- Final_Investor_Dataset$Binary_normalized_degree_centralization * 100
+
+pm1 <- lm(InvestorAvgGrowth_in_Percent ~ Normalized_Centralization_in_Percent + I(Normalized_Centralization_in_Percent^2), data = Final_Investor_Dataset)
+modelsummary(pm1, stars = TRUE, gof_map = c("nobs", "adj.r.squared"))
+model_tidy3 <- tidy(summary(pm1))
+
+ggplot(Final_Investor_Dataset, aes(x = Normalized_Centralization_in_Percent, y = InvestorAvgGrowth_in_Percent)) +
+  geom_point() +  
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), se = FALSE, color = "red") +
+  labs(x = "Normalized Centralization in Percent", y = "Investor Average Growth in Percent",
+       title = "Quadratic Fit of Investor Average Growth (in %) on Normalized Degree Centralization (in %)") +
+  theme_minimal()
+
+
+predictionsforvisualization <- data.frame(Normalized_Centralization_in_Percent = seq(0, 100, length.out = 100))
+
+predictionsforvisualization$Predicted_Growth <- predict(pm1, predictionsforvisualization)
+
+ggplot(predictionsforvisualization, aes(x = Normalized_Centralization_in_Percent, y = Predicted_Growth)) +
+  geom_line(color = "red", size = 2.0) +
+  labs(x = "Normalized Centralization %", y = "Predicted Investor Avg Growth %",
+       title = "Model Prediction: Centralization and Growth in %") +
+  coord_cartesian(xlim = c(0, 75), ylim = c(-200, 100)) +
+  theme(plot.title = element_text(face = "bold"),
+  axis.title.x = element_text(face = "bold"),
+  axis.title.y = element_text(face = "bold"))

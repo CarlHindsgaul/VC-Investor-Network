@@ -254,6 +254,30 @@ Final_Investor_Dataset <- Final_Investor_Dataset %>%
 
 ### Perfect, let us then do the statistics
 
+  ### Let us first do some descriptive statistics
+
+ggplot(data = Final_Investor_Dataset, aes(x = Degree_centralization)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Degree Centralization", y = "Density", title = "Density Plot of Degree Centralization")
+
+ggplot(data = Final_Investor_Dataset, aes(x = Transitivity)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Transitivity", y = "Density", title = "Density Plot of Transitivity")
+
+ggplot(data = Final_Investor_Dataset, aes(x = K_step_reach)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "2 Step Reach", y = "Density", title = "Density Plot of 2 Step Reach")
+
+ggplot(data = Final_Investor_Dataset, aes(x = Betweenness)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Betweenness", y = "Density", title = "Density Plot of Betweenness")
+
+ggplot(data = Final_Investor_Dataset, aes(x = InvestorAvgGrowth)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Investor Avg Growth", y = "Density", title = "Density Plot of Investor Avg Growth")
+
+
+
   ### It is interesting to find out the impact of being a Danish VC fund vs non Danish, so we will make a binary variable for that 
 
 Final_Investor_Dataset <- Final_Investor_Dataset %>%
@@ -271,11 +295,11 @@ Final_Investor_Dataset$Normalized_Centralization_in_Percent <- Final_Investor_Da
 
           ### Now for making the regression model for normalized degree centralization:
 
-RMnormdeg <- lm(InvestorAvgGrowth_in_Percent ~ Normalized_Centralization_in_Percent + I(Normalized_Centralization_in_Percent^2), data = Final_Investor_Dataset)
+RMnormdeg <- lm(InvestorAvgGrowth_in_Percent ~ Normalized_Centralization_in_Percent + I(Normalized_Centralization_in_Percent^2) + Is_Danish, data = Final_Investor_Dataset)
 modelsummary(RMnormdeg, stars = TRUE, gof_map = c("nobs", "adj.r.squared"))
 RMnormdeg_tidy1 <- tidy(summary(RMnormdeg))
 
-          ### Here is a good graph to visualize the result: 
+          ### Here is a  graph to visualize the result (NB this ignores the control variable): 
 
 ggplot(Final_Investor_Dataset, aes(x = Normalized_Centralization_in_Percent, y = InvestorAvgGrowth_in_Percent)) +
   geom_point() +  
@@ -284,9 +308,11 @@ ggplot(Final_Investor_Dataset, aes(x = Normalized_Centralization_in_Percent, y =
        title = "Quadratic Fit of Investor Average Growth (in %) on Normalized Degree Centralization (in %)") +
   theme_minimal()
 
-predictionsforvisualization <- data.frame(Normalized_Centralization_in_Percent = seq(0, 100, length.out = 100))
+predictionsforvisualization <- expand.grid(
+  Normalized_Centralization_in_Percent = seq(0, 100, length.out = 100),
+  Is_Danish = c(0, 1))
 
-predictionsforvisualization$Predicted_Growth <- predict(pm1, predictionsforvisualization)
+predictionsforvisualization$Predicted_Growth <- predict(RMnormdeg, predictionsforvisualization)
 
 ggplot(predictionsforvisualization, aes(x = Normalized_Centralization_in_Percent, y = Predicted_Growth)) +
   geom_line(color = "red", size = 2.0) +
@@ -299,10 +325,10 @@ ggplot(predictionsforvisualization, aes(x = Normalized_Centralization_in_Percent
 
         ### Second model : Transitivity 
 
-RMtransitivity <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity, data = Final_Investor_Dataset)
+RMtransitivity <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity + Is_Danish, data = Final_Investor_Dataset)
 RMtransitivity_tidy <- tidy(summary(RMtransitivity))
 
-RMtransitivity2 <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity + I(Transitivity^2), data = Final_Investor_Dataset)
+RMtransitivity2 <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity + I(Transitivity^2) + Is_Danish, data = Final_Investor_Dataset)
 RMtransitivity2_tidy <- tidy(summary(RMtransitivity2))
 
 ggplot(Final_Investor_Dataset, aes(x = Transitivity, y = InvestorAvgGrowth_in_Percent)) +
@@ -314,12 +340,12 @@ ggplot(Final_Investor_Dataset, aes(x = Transitivity, y = InvestorAvgGrowth_in_Pe
 
         ### Third model: Betweenness 
 
-RMbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ Betweenness, data = Final_Investor_Dataset)
+RMbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ Betweenness + Is_Danish, data = Final_Investor_Dataset)
 RMbetweenness_tidy <- tidy(summary(RMbetweenness))
 
         ### Fourth model: 2 Step Reach 
 
-RMKstep <- lm(InvestorAvgGrowth_in_Percent ~ K_step_reach + I(K_step_reach^2), data = Final_Investor_Dataset)
+RMKstep <- lm(InvestorAvgGrowth_in_Percent ~ K_step_reach + I(K_step_reach^2) + Is_Danish, data = Final_Investor_Dataset)
 RMKstep_tidy <- tidy(summary(RMKstep))
 
 ggplot(Final_Investor_Dataset, aes(x = K_step_reach, y = InvestorAvgGrowth_in_Percent)) +
@@ -329,7 +355,9 @@ ggplot(Final_Investor_Dataset, aes(x = K_step_reach, y = InvestorAvgGrowth_in_Pe
        title = "Quadratic Fit of Investor Average Growth (in %) and 2 Step Reach") +
   theme_minimal()
 
-predictionsforvisualization2 <- data.frame(K_step_reach = seq(0, 104, length.out = 104))
+predictionsforvisualization2 <- expand.grid(
+  K_step_reach = seq(0, 104, length.out = 104),
+  Is_Danish = c(0, 1))
 
 predictionsforvisualization2$Predicted_Growth <- predict(RMKstep, predictionsforvisualization2)
 
@@ -341,16 +369,5 @@ ggplot(predictionsforvisualization2, aes(x = K_step_reach, y = Predicted_Growth)
   theme(plot.title = element_text(face = "bold"),
         axis.title.x = element_text(face = "bold"),
         axis.title.y = element_text(face = "bold"))
-
-        ### Fifth model: Multivariate model 
-        ### (the problem with this multivariate model is that the variables to some degree measure the same thing - centrality - and this formula 'splits them up'
-        ### which makes the result less significant and impactful. For example, transitivity might be an aspect of why/how degree centrality works causally, 
-        ### but by including both in the same model, we are splitting up one causal effect and therefore cannot measure it properly)
-
-MVM1 <- lm(InvestorAvgGrowth_in_Percent ~ Normalized_Centralization_in_Percent + I(Normalized_Centralization_in_Percent^2) + Betweenness + Transitivity + Is_Danish, data = Final_Investor_Dataset)
-MVM1_tidy <- tidy(summary(MVM1))
-
-MVM2 <- lm(InvestorAvgGrowth_in_Percent ~ K_step_reach + I(K_step_reach^2) + Betweenness + Transitivity + Is_Danish, data = Final_Investor_Dataset)
-MVM2_tidy <- tidy(summary(MVM2))
 
         ### So it seems that K step 2 reach is the most significant variable. Interesting! 

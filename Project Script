@@ -132,7 +132,7 @@ transitivity_df <- data.frame(
 edge_list_2 <- merge(edge_list_2, transitivity_df, by = "Investor", all.x = TRUE)
 
 
-    ### Now let us go to K-step reach, with K = 2
+    ### Now let us go to K-step reach, with K = 2 (so unique nodes accessible via 2 steps, e.g. A=B and B=C, then A has a K2 reach of 2)
 
 investor_indices = which(V(g2)$name %in% edge_list_2$Investor)
 
@@ -142,8 +142,7 @@ k_step_reach_counts <- sapply(k_step_reach_list, function(x) length(x))
 
 k_step_reach_df <- data.frame(
   Investor = V(g2)$name[investor_indices],
-  K_step_reach = k_step_reach_counts
-)
+  K_step_reach = k_step_reach_counts)
 
 edge_list_2 <- merge(edge_list_2, k_step_reach_df, by = "Investor", all.x = TRUE)
 
@@ -246,9 +245,6 @@ investor_variables <- edge_list_2_with_financials %>%
 
 Final_Investor_Dataset <- Final_Investor_Dataset %>%
   left_join(investor_variables, by = "Investor")
-
-
-
 
 
 
@@ -371,3 +367,68 @@ ggplot(predictionsforvisualization2, aes(x = K_step_reach, y = Predicted_Growth)
         axis.title.y = element_text(face = "bold"))
 
         ### So it seems that K step 2 reach is the most significant variable. Interesting! 
+
+
+
+
+
+### Now let us add a few other variables (based on recent supervision). 
+
+      ### First, Second Step Reach (the direct connections of a node's connections) 
+
+Final_Investor_Dataset$Second_Step_Reach <- Final_Investor_Dataset$K_step_reach - Final_Investor_Dataset$Binary_degree_centralization
+
+      ### Second, Repeated Ties (ie 'strong' ties)
+
+count_repeated_ties <- function(node_name) {
+  node_index <- match(node_name, rownames(adjacency_matrix))  
+  repeated_ties <- sum(adjacency_matrix[node_index, ] > 1)  # Count the number of values greater than 1 in the row corresponding to that node
+  return(repeated_ties)}
+
+repeated_ties_df <- data.frame(
+  Investor = V(g2)$name[investor_indices],  # Use the names of the nodes
+  Repeated_Ties = sapply(V(g2)$name[investor_indices], count_repeated_ties))
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, repeated_ties_df, by = "Investor", all.x = TRUE)
+
+      ### Third, 4-step Betweenness (ie betweenness but only counting pairs where nodes are within 4 steps)
+      ### Apparently this cannot be done with the current igraph object, so we will make a new one (g3)
+
+shortest_paths = shortest.paths(g2)
+
+new_adjacency_matrix = ifelse(shortest_paths > 4 | is.infinite(shortest_paths), 0, 1)
+
+g3 = graph_from_adjacency_matrix(new_adjacency_matrix, mode = "undirected")
+
+fourstep_betweenness <- betweenness(g3, directed = FALSE)
+
+new_betweenness_df <- data.frame(
+  Investor = names(fourstep_betweenness),
+  Four_Step_Betweenness = fourstep_betweenness)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, new_betweenness_df, by = "Investor", all = TRUE)
+
+
+
+### OK so let us try and build models using these variables:
+
+RMsecondstepreach <- lm(InvestorAvgGrowth_in_Percent ~ Second_Step_Reach + I(Second_Step_Reach^2) + Is_Danish, data = Final_Investor_Dataset)
+RMsecondstepreach_tidy <- tidy(summary(RMsecondstepreach))
+
+RMrepeatedties <- lm(InvestorAvgGrowth_in_Percent ~ Repeated_Ties + Is_Danish, data = Final_Investor_Dataset)
+RMrepeatedties_tidy <- tidy(summary(RMrepeatedties))
+  
+RMfourstepbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ four_step_betweenness + Is_Danish, data = Final_Investor_Dataset)
+RMfourstepbetweenness_tidy <- tidy(summary(RMfourstepbetweenness))
+  
+### OK we can take a look at correlations and multicollinearity and maybe test some multivariate models
+
+CollerationMatrix <- cor(Final_Investor_Dataset[, sapply(Final_Investor_Dataset, is.numeric)], use="pairwise.complete.obs")
+
+### ok, binary degree centralization correlates 0.81 with K step reach and 0.71 with Second step reach.
+### so multivariate models become sketchy
+
+
+### Now let us experiment with removing some of the major funds (based on recent supervision). 
+
+

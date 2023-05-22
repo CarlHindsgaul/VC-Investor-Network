@@ -147,45 +147,8 @@ k_step_reach_df <- data.frame(
 edge_list_2 <- merge(edge_list_2, k_step_reach_df, by = "Investor", all.x = TRUE)
 
 
-### I will test out what the network looks like with binary edges (never more than 1 connection to any investor) ###
 
-binary_matrix <- adjacency_matrix
 
-binary_matrix[binary_matrix > 0] <- 1
-
-gbinary <- graph_from_adjacency_matrix(binary_matrix, mode = "undirected")
-
-plot(gbinary,
-     vertex.size = 7,
-     vertex.label = NA,
-     main = "Investor Network / Binary Ties")
-
-          ### I will also test degree centralization with binary edges/no edge
-
-binary_cent_degree_object <- degree(gbinary,
-                             loops = FALSE,
-                             normalized = FALSE)
-
-binary_cent_degree_df <- data.frame( 
-  Investor = names(binary_cent_degree_object),
-  Binary_degree_centralization = binary_cent_degree_object)
-
-edge_list_2 <- merge(edge_list_2, binary_cent_degree_df, by = "Investor", all.x = TRUE)
-
-edge_list_2$Binary_normalized_degree_centralization <- edge_list_2$Binary_degree_centralization / 37    ### We use 37 because 37 is the highest UNIQUE degree centralization (Seed Capital)
-
-## I will illustrate the difference between controlling for multiple investments in the normalized centralization score: 
-
-ggplot(edge_list_2) +
-  geom_density(aes(x = Binary_normalized_degree_centralization, color = "Binary"), size = 1) +
-  geom_density(aes(x = Normalized_degree_centralization, color = "Normalized"), size = 1) +
-  labs(title = "Binary vs Normalized Degree Centralization",
-       x = "Centralization Score",
-       y = "Density",
-       color = "Calculation Methods") +
-  theme_classic()
-
-### Test over ###
 
 
 ### FINANCIALS: OK, we might do more network stuff (e.g. k-step), but let us get the financials sorted
@@ -204,9 +167,7 @@ edge_list_2_with_financials <- edge_list_2_with_financials %>%
 edge_list_2_with_financials <- edge_list_2_with_financials %>%
   select(-Valuta)
 
-write.xlsx(edge_list_2_with_financials, "C:\\Users\\carlw\\Mit drev\\2nd Year Project\\edge_list_2 - with financials4.xlsx")
-
-
+### now you can write.xlsx(edge_list_2_with_financials, "PATH.xlsx")
 
 
 
@@ -369,9 +330,6 @@ ggplot(predictionsforvisualization2, aes(x = K_step_reach, y = Predicted_Growth)
         ### So it seems that K step 2 reach is the most significant variable. Interesting! 
 
 
-
-
-
 ### Now let us add a few other variables (based on recent supervision). 
 
       ### First, Second Step Reach (the direct connections of a node's connections) 
@@ -418,7 +376,7 @@ RMsecondstepreach_tidy <- tidy(summary(RMsecondstepreach))
 RMrepeatedties <- lm(InvestorAvgGrowth_in_Percent ~ Repeated_Ties + Is_Danish, data = Final_Investor_Dataset)
 RMrepeatedties_tidy <- tidy(summary(RMrepeatedties))
   
-RMfourstepbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ four_step_betweenness + Is_Danish, data = Final_Investor_Dataset)
+RMfourstepbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ Four_Step_Betweenness + Is_Danish, data = Final_Investor_Dataset)
 RMfourstepbetweenness_tidy <- tidy(summary(RMfourstepbetweenness))
   
 ### OK we can take a look at correlations and multicollinearity and maybe test some multivariate models
@@ -427,8 +385,3 @@ CollerationMatrix <- cor(Final_Investor_Dataset[, sapply(Final_Investor_Dataset,
 
 ### ok, binary degree centralization correlates 0.81 with K step reach and 0.71 with Second step reach.
 ### so multivariate models become sketchy
-
-
-### Now let us experiment with removing some of the major funds (based on recent supervision). 
-
-

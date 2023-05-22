@@ -1,0 +1,357 @@
+### load packages (install first if the PC doesn't have them installed)
+
+library(tidyverse)
+library(readxl)
+library(stringr)
+library(igraph)
+library(openxlsx)
+library(modelsummary)
+library(broom)
+
+### load data
+
+### find the VC Data file on my github: https://github.com/CarlHindsgaul/VC-Investor-Network)
+### now download it and modify the path in the script so your downloaded file is loaded as the dataframe
+
+data <- read_excel("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\No Vækstfonden or Seed Capital - VC Data.xlsx")
+
+### restructure data so each row represents an "edge" (connection between investor and company)
+
+edge_list <- data %>%
+  mutate(Investors = strsplit(as.character(Investors), ", ")) %>%
+  unnest(Investors) %>% 
+  separate(Investors, c("Investor", "InvestorCountry"), " \\(") %>% 
+  mutate(InvestorCountry = gsub("\\)", "", InvestorCountry))
+
+
+### restructure edge_list to an adjacency matrix, which is useful for network analysis
+
+### first make a new dataframe with only edgelist variables (company and investor)
+
+edge_list_excl <- edge_list %>%
+  select(Investor, Company)
+
+### now make an incidence matrix. We need to create an igraph object, i.e. a network-analysis object. 
+### the iGraph object requires a list of nodes and the type of each node.
+
+### we only want the unique names. In the edge_list, each company and investor (each 'vertex') can appear several times.
+
+vertex_list <- unique(c(edge_list_excl$Company, edge_list_excl$Investor))
+
+### we also want to have information about whether each node/name is a company or an investor.
+
+vertex_types <- ifelse(vertex_list %in% edge_list_excl$Company, TRUE, FALSE)
+
+### we now create the igraph object, let us call it "g", and convert it into an incidence matrix.
+
+g <- graph_from_data_frame(edge_list_excl, directed = FALSE, vertices = data.frame(name = vertex_list, type = vertex_types))
+
+incidence_matrix <- as_incidence_matrix(g, sparse = FALSE)
+
+### Make an adjacency matrix
+### (First, we turn the incidence matrix into a binary, so only 1 for investment, otherwise 0. This is to prepare for later calculations that require binary format)
+
+binary_investment_matrix <- as.matrix(ifelse(incidence_matrix > 0, 1, 0))
+
+### (Second, we multiply (%*%) the binary investment matrix with its transpose (i.e. 'turned' matrix, so row 1 becomes column 1 etc.))
+### (The result is the 'overlap' of investors since we have binary data, only 1 and 0, and matrix multiplication works by multiplying row values with column values
+###  so when, say, investor row b has a '1' on its fourth column, representing company y, and transpore-investor a has a 1 in its fourth row, we have 1*1 = an overlap
+###  and the way matrix multiplication works, all row & column values are 'compared' like this and summed up, thus counting overlaps)
+### All right, so we do the calculation: multiply the matrix with its transpose (t() function)
+
+co_investment_matrix <- binary_investment_matrix %*% t(binary_investment_matrix)
+
+### But we also set the diagonal elements to 0, since we are not concerned with how connected each fund is with itself
+
+diag(co_investment_matrix) <- 0
+
+### Now we have the adjacency matrix. I will just create a separate object for it with that name: adjacency_matrix
+### I will write it to csv and upload it to github 
+
+adjacency_matrix <- co_investment_matrix
+
+### With the adjacency matrix, which is useful for network analysis, we can make the igraph i.e. network analysis object
+
+g2 <- graph_from_adjacency_matrix(adjacency_matrix, mode = "undirected")
+
+### We can now, for the first time, get a visual, qualitative sense of the data!
+### (it gets too messy with all the labels)
+
+plot(g2,
+     vertex.size = 7,
+     vertex.label = NA,
+     main = "Investor Network / no label")
+
+### Ok great, now let us create network data for the investors: betweenness centrality, centralization score, and k-step reach.
+
+### we first need a dataset if we want to make a quantitative model that uses all of these measures at the same time. We will make a new one called edge_list_2.
+
+edge_list_2 <- edge_list
+
+### we then start with betweenness
+
+betweenness_object <- betweenness(g2)
+
+betweenness_df <- data.frame(
+  Investor = names(betweenness_object),
+  Betweenness = betweenness_object)
+
+edge_list_2 <- merge(edge_list_2, betweenness_df, by = "Investor", all.x = TRUE) ### the last part all.x is about keeping all rows, and by = means we use Investor column for 'matching' values to the appropriate investor
+
+### let us now go to centralization score
+
+cent_degree_object <- degree(g2,
+                             loops = FALSE,
+                             normalized = FALSE)
+
+cent_degree_df <- data.frame( 
+  Investor = names(cent_degree_object),
+  Degree_centralization = cent_degree_object)
+
+edge_list_2 <- merge(edge_list_2, cent_degree_df, by = "Investor", all.x = TRUE)
+
+### Now let us go to transitivity 
+### We use the local transitivity function: "The local transitivity of a vertex is the ratio of the count of triangles connected to the vertex and the triples centered on the vertex."
+
+transitivity_object <- transitivity(g2,
+                                    type = "localundirected",
+                                    isolates = "zero")
+
+Investor_names <- unique(edge_list_2$Investor)
+
+transitivity_df <- data.frame(
+  Investor = Investor_names,
+  Transitivity = transitivity_object)
+
+### Now let us go to K-step reach, with K = 2 (so unique nodes accessible via 2 steps, e.g. A=B and B=C, then A has a K2 reach of 2)
+
+investor_indices = which(V(g2)$name %in% edge_list_2$Investor)
+
+k_step_reach_list <- ego(g2, order = 2, mode = "all", mindist = 1, nodes = investor_indices)
+
+k_step_reach_counts <- sapply(k_step_reach_list, function(x) length(x))
+
+k_step_reach_df <- data.frame(
+  Investor = V(g2)$name[investor_indices],
+  K_step_reach = k_step_reach_counts)
+
+edge_list_2 <- merge(edge_list_2, k_step_reach_df, by = "Investor", all.x = TRUE)
+
+
+
+
+
+### FINANCIALS: Let us get the financials sorted
+
+### We have manually typed in the financials to the edge_list_2 file, renaming it "edge_list_2 - with financials"
+### It is in the github folder, download it and put your own path below: 
+
+edge_list_2_with_financials <- read.xlsx("C:\\Users\\carlw\\Mit drev\\2nd Year Project\\No Vækstfonden or Seed Capital - edge_list_2.xlsx")
+
+
+### OK let us calculate VC fund performance
+
+### first we take care not to end up with positive growth numbers when dividing a negative number with a negative number! (we use'abs')
+### otherwise e.g. GP of -10 in 2019 and -20 in 2020 would be: (-20-10)/-10 = 3, and of course the company did not grow by 300%!
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  mutate(Growth2020 = (GP2020 - GP2019) / abs(GP2019),
+         Growth2021 = (GP2021 - GP2020) / abs(GP2020),
+         Growth2022 = (GP2022 - GP2021) / abs(GP2021))
+
+edge_list_2_with_financials <- edge_list_2_with_financials %>%
+  mutate(AvgGrowth = rowMeans(select(., Growth2020, Growth2021, Growth2022), na.rm = TRUE))
+
+investor_average_growth <- edge_list_2_with_financials %>%
+  group_by(Investor) %>%
+  summarise(InvestorAvgGrowth = mean(AvgGrowth, na.rm = TRUE))
+
+
+
+
+### OK - let us combine the fund-level network data and fund-level performance data to make statistics
+
+Final_Investor_Dataset <- investor_average_growth
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, transitivity_df, by = "Investor", all.x = TRUE)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, k_step_reach_df, by = "Investor", all.x = TRUE)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, betweenness_df, by = "Investor", all.x = TRUE)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, cent_degree_df, by = "Investor", all.x = TRUE)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, binary_cent_degree_df, by = "Investor", all.x = TRUE)
+
+Final_Investor_Dataset$Normalized_binary_degree_centralization <- Final_Investor_Dataset$Binary_degree_centralization / 22
+
+### Perfect, let us then do the statistics
+
+### Let us first do some descriptive statistics
+
+ggplot(data = Final_Investor_Dataset, aes(x = Degree_centralization)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Degree Centralization", y = "Density", title = "Density Plot of Degree Centralization")
+
+ggplot(data = Final_Investor_Dataset, aes(x = Transitivity)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Transitivity", y = "Density", title = "Density Plot of Transitivity")
+
+ggplot(data = Final_Investor_Dataset, aes(x = K_step_reach)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "2 Step Reach", y = "Density", title = "Density Plot of 2 Step Reach")
+
+ggplot(data = Final_Investor_Dataset, aes(x = Betweenness)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Betweenness", y = "Density", title = "Density Plot of Betweenness")
+
+ggplot(data = Final_Investor_Dataset, aes(x = InvestorAvgGrowth)) +
+  geom_density(fill = "skyblue", color = "black") +
+  labs(x = "Investor Avg Growth", y = "Density", title = "Density Plot of Investor Avg Growth")
+
+
+### It is interesting to find out the impact of being a Danish VC fund vs non Danish, so we will make a binary variable for that 
+
+edge_list_2 <- edge_list_2 %>%
+  mutate(Is_Danish = ifelse(InvestorCountry == "DK", 1, 0))
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, edge_list_2[, c("Investor", "Is_Danish")], by = "Investor", all.x = TRUE)
+
+### OK let us do our regression models:
+
+### First Model: Degree centralization (normalized score, counting each tie only once)
+
+### I think it is easier to interpret the variables if 1 = 1%, so let us change it:
+
+Final_Investor_Dataset$InvestorAvgGrowth_in_Percent <- Final_Investor_Dataset$InvestorAvgGrowth * 100
+
+Final_Investor_Dataset$Normalized_Centralization_in_Percent <- Final_Investor_Dataset$Normalized_binary_degree_centralization * 100
+
+### Now for making the regression model for normalized degree centralization:
+
+RMnormdeg <- lm(InvestorAvgGrowth_in_Percent ~ Normalized_Centralization_in_Percent + I(Normalized_Centralization_in_Percent^2) + Is_Danish, data = Final_Investor_Dataset)
+modelsummary(RMnormdeg, stars = TRUE, gof_map = c("nobs", "adj.r.squared"))
+RMnormdeg_tidy1 <- tidy(summary(RMnormdeg))
+
+### Here is a  graph to visualize the result (NB this ignores the control variable): 
+
+ggplot(Final_Investor_Dataset, aes(x = Normalized_Centralization_in_Percent, y = InvestorAvgGrowth_in_Percent)) +
+  geom_point() +  
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), se = FALSE, color = "red") +
+  labs(x = "Normalized Centralization in Percent", y = "Investor Average Growth in Percent",
+       title = "Quadratic Fit of Investor Average Growth (in %) on Normalized Degree Centralization (in %)") +
+  theme_minimal()
+
+predictionsforvisualization <- expand.grid(
+  Normalized_Centralization_in_Percent = seq(0, 100, length.out = 100),
+  Is_Danish = c(0, 1))
+
+predictionsforvisualization$Predicted_Growth <- predict(RMnormdeg, predictionsforvisualization)
+
+ggplot(predictionsforvisualization, aes(x = Normalized_Centralization_in_Percent, y = Predicted_Growth)) +
+  geom_line(color = "red", size = 2.0) +
+  labs(x = "Normalized Centralization %", y = "Predicted Investor Avg Growth %",
+       title = "Model Prediction: Centralization and Growth in %") +
+  coord_cartesian(xlim = c(0, 75), ylim = c(-200, 100)) +
+  theme(plot.title = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+
+### Second model : Transitivity 
+
+RMtransitivity <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity + Is_Danish, data = Final_Investor_Dataset)
+RMtransitivity_tidy <- tidy(summary(RMtransitivity))
+
+RMtransitivity2 <- lm(InvestorAvgGrowth_in_Percent ~ Transitivity + I(Transitivity^2) + Is_Danish, data = Final_Investor_Dataset)
+RMtransitivity2_tidy <- tidy(summary(RMtransitivity2))
+
+### Third model: Betweenness 
+
+RMbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ Betweenness + Is_Danish, data = Final_Investor_Dataset)
+RMbetweenness_tidy <- tidy(summary(RMbetweenness))
+
+### Fourth model: 2 Step Reach 
+
+RMKstep <- lm(InvestorAvgGrowth_in_Percent ~ K_step_reach + I(K_step_reach^2) + Is_Danish, data = Final_Investor_Dataset)
+RMKstep_tidy <- tidy(summary(RMKstep))
+
+ggplot(Final_Investor_Dataset, aes(x = K_step_reach, y = InvestorAvgGrowth_in_Percent)) +
+  geom_point() +  
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), se = FALSE, color = "red") +
+  labs(x = "2 Step Reach", y = "Investor Average Growth in Percent",
+       title = "Quadratic Fit of Investor Average Growth (in %) and 2 Step Reach") +
+  theme_minimal()
+
+predictionsforvisualization2 <- expand.grid(
+  K_step_reach = seq(0, 104, length.out = 104),
+  Is_Danish = c(0, 1))
+
+predictionsforvisualization2$Predicted_Growth <- predict(RMKstep, predictionsforvisualization2)
+
+ggplot(predictionsforvisualization2, aes(x = K_step_reach, y = Predicted_Growth)) +
+  geom_line(color = "red", size = 2.0) +
+  labs(x = "2 Step Reach", y = "Predicted Investor Avg Growth %",
+       title = "Model Prediction: 2 Step Reach and Growth in %") +
+  coord_cartesian(xlim = c(0, 75), ylim = c(-200, 100)) +
+  theme(plot.title = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+
+### So it seems that K step 2 reach is the most significant variable. Interesting! 
+
+
+
+
+
+### Now let us add a few other variables (based on recent supervision). 
+
+### First, Second Step Reach (the direct connections of a node's connections) 
+
+Final_Investor_Dataset$Second_Step_Reach <- Final_Investor_Dataset$K_step_reach - Final_Investor_Dataset$Binary_degree_centralization
+
+### Second, Repeated Ties (ie 'strong' ties)
+
+count_repeated_ties <- function(node_name) {
+  node_index <- match(node_name, rownames(adjacency_matrix))  
+  repeated_ties <- sum(adjacency_matrix[node_index, ] > 1)  # Count the number of values greater than 1 in the row corresponding to that node
+  return(repeated_ties)}
+
+repeated_ties_df <- data.frame(
+  Investor = V(g2)$name[investor_indices],  # Use the names of the nodes
+  Repeated_Ties = sapply(V(g2)$name[investor_indices], count_repeated_ties))
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, repeated_ties_df, by = "Investor", all.x = TRUE)
+
+### Third, 4-step Betweenness (ie betweenness but only counting pairs where nodes are within 4 steps)
+### Apparently this cannot be done with the current igraph object, so we will make a new one (g3)
+
+shortest_paths = shortest.paths(g2)
+
+new_adjacency_matrix = ifelse(shortest_paths > 4 | is.infinite(shortest_paths), 0, 1)
+
+g3 = graph_from_adjacency_matrix(new_adjacency_matrix, mode = "undirected")
+
+fourstep_betweenness <- betweenness(g3, directed = FALSE)
+
+new_betweenness_df <- data.frame(
+  Investor = names(fourstep_betweenness),
+  Four_Step_Betweenness = fourstep_betweenness)
+
+Final_Investor_Dataset <- merge(Final_Investor_Dataset, new_betweenness_df, by = "Investor", all = TRUE)
+
+### OK so let us try and build models using these variables:
+
+RMsecondstepreach <- lm(InvestorAvgGrowth_in_Percent ~ Second_Step_Reach + I(Second_Step_Reach^2) + Is_Danish, data = Final_Investor_Dataset)
+RMsecondstepreach_tidy <- tidy(summary(RMsecondstepreach))
+
+RMrepeatedties <- lm(InvestorAvgGrowth_in_Percent ~ Repeated_Ties + Is_Danish, data = Final_Investor_Dataset)
+RMrepeatedties_tidy <- tidy(summary(RMrepeatedties))
+
+RMfourstepbetweenness <- lm(InvestorAvgGrowth_in_Percent ~ Four_Step_Betweenness + Is_Danish, data = Final_Investor_Dataset)
+RMfourstepbetweenness_tidy <- tidy(summary(RMfourstepbetweenness))
+
+### OK we can take a look at correlations and multicollinearity and maybe test some multivariate models
+
+CorrelationMatrix <- cor(Final_Investor_Dataset[, sapply(Final_Investor_Dataset, is.numeric)], use="pairwise.complete.obs")
+
+
